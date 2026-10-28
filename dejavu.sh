@@ -28,6 +28,20 @@ keep_sudo_alive() {
   trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
 }
 
+configure_pacman() {
+  local conf=/etc/pacman.conf
+
+  [[ -e "$conf.bak" ]] || sudo cp "$conf" "$conf.bak"
+  sudo sed -i \
+    -e 's/^#VerbosePkgLists$/VerbosePkgLists/' \
+    -e 's/^#\?ParallelDownloads = .*/ParallelDownloads = 10/' \
+    "$conf"
+  # Guard the append so reruns don't add a second ILoveCandy line.
+  if ! grep -q '^ILoveCandy$' "$conf"; then
+    sudo sed -i '/^ParallelDownloads = 10$/a ILoveCandy' "$conf"
+  fi
+}
+
 install_prerequisites() {
   sudo pacman -Syu --needed --noconfirm base-devel git
 }
@@ -227,6 +241,7 @@ print_summary() {
 main() {
   check_not_root
   keep_sudo_alive
+  configure_pacman
   install_prerequisites
   install_paru
   installation_loop
