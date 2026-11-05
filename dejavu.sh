@@ -8,6 +8,7 @@ SRC_DIR="$HOME/.config/build"
 DOTFILES_REPO="https://github.com/me0mar/dotfiles"
 BETTERFOX_REPO="https://github.com/yokoffing/Betterfox"
 WALLPAPER_URL="https://raw.githubusercontent.com/dracula/wallpaper/master/first-collection/arch.png"
+DRACULA_GTK_URL="https://raw.githubusercontent.com/0m-km/dejavu/main/static/gtk/dracula-gtk.zip"
 failed=()
 
 check_not_root() {
@@ -190,6 +191,42 @@ setup_wallpaper() {
   chmod +x "$HOME/.fehbg"
 }
 
+setup_gtk_theme() {
+  local theme_dir="$HOME/.local/share/themes/Dracula"
+  local download_dir
+  local file
+  local settings
+  local version
+
+  if [[ ! -d "$theme_dir" ]]; then
+    download_dir="$(mktemp -d)"
+    curl -fsSL -o "$download_dir/dracula.zip" "$DRACULA_GTK_URL"
+    unzip -q "$download_dir/dracula.zip" -d "$download_dir"
+    mkdir -p -- "$(dirname -- "$theme_dir")"
+    mv -- "$download_dir/gtk-master" "$theme_dir"
+    rm -rf -- "$download_dir"
+  fi
+
+  # libadwaita apps ignore the theme name and load this CSS, which points at ../assets.
+  link_file "$theme_dir/assets" "$HOME/.config/assets"
+  for file in gtk.css gtk-dark.css; do
+    link_file "$theme_dir/gtk-4.0/$file" "$HOME/.config/gtk-4.0/$file"
+  done
+
+  # dwm has no settings daemon, so GTK apps read settings.ini instead of gsettings.
+  for version in 3.0 4.0; do
+    settings="$HOME/.config/gtk-$version/settings.ini"
+    if [[ -f "$settings" ]]; then
+      # shortcut: a file without a gtk-theme-name line stays unthemed, add the line if that ever happens.
+      sed -i 's/^gtk-theme-name=.*/gtk-theme-name=Dracula/' "$settings"
+    else
+      mkdir -p -- "$(dirname -- "$settings")"
+      printf '[Settings]\ngtk-theme-name=Dracula\n' >"$settings"
+    fi
+  done
+  gsettings set org.gnome.desktop.interface gtk-theme Dracula
+}
+
 setup_ufw() {
   sudo systemctl enable --now ufw.service
   sudo ufw default deny incoming
@@ -231,6 +268,17 @@ fix_screen_tearing() {
     /etc/X11/xorg.conf.d/20-amd-gpu.conf
 }
 
+setup_oom_protection() {
+  # dwm apps share one session cgroup, so systemd-oomd could kill the whole X session.
+  sudo install -Dm644 "$SCRIPT_DIR/static/earlyoom/earlyoom" /etc/default/earlyoom
+  sudo install -Dm644 "$SCRIPT_DIR/static/zram/zram-generator.conf" /etc/systemd/zram-generator.conf
+  sudo systemctl daemon-reload
+  sudo systemctl enable earlyoom.service
+  sudo systemctl restart earlyoom.service
+  # shortcut: start is a no-op if zram0 is already active, so a resize waits for the next reboot.
+  sudo systemctl start systemd-zram-setup@zram0.service
+}
+
 print_summary() {
   if ((${#failed[@]})); then
     printf '\nThese entries failed to install: %s\n' "${failed[*]}" >&2
@@ -248,10 +296,12 @@ main() {
   deploy_dotfiles
   setup_firefox
   setup_wallpaper
+  setup_gtk_theme
   setup_ufw
   setup_docker
   setup_kvm
   fix_screen_tearing
+  setup_oom_protection
   print_summary
 }
 

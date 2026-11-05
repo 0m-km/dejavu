@@ -11,6 +11,8 @@
 ,git,"manages source code and pulls the suckless builds."
 ,neovim,"is the text editor."
 ,htop,"monitors processes and system resources."
+,earlyoom,"kills the hungriest process before low memory freezes the system."
+,zram-generator,"provides compressed swap in RAM."
 ,bat,"shows files with syntax highlighting."
 ,lsd,"lists files with colors and icons."
 ,lf,"is the terminal file manager."

@@ -1,0 +1,1 @@
+EARLYOOM_ARGS="-r 3600 -n --avoid '(^|/)(init|systemd|Xorg|sshd|dwm)$' --prefer '(^|/)(chrome|chromium|firefox|electron|code)$'"
